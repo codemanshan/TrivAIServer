@@ -1,42 +1,39 @@
-import * as OpenAI from 'openai';
-import { AzureFunction, Context, HttpRequest } from "@azure/functions"
+import { AzureFunction, Context, HttpRequest } from '@azure/functions';
+import axios from 'axios';
 
-const httpTrigger: AzureFunction = async function (context: Context, req: HttpRequest): Promise<void> {
-    const openai = new OpenAI.Api({ apiKey: process.env.OPENAI_API_KEY });
+const httpTrigger: AzureFunction = async function (
+  context: Context,
+  req: HttpRequest
+): Promise<void> {
+  const response = await axios.post(
+    'https://api.openai.com/v4/engines/davinci-codex/completions',
+    {
+      prompt: 'Generate a trivia question with multiple choice answers.',
+      max_tokens: 60,
+    },
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+    }
+  );
 
-    // Generate trivia question
-    const promptForQuestion = 'Generate a trivia question and its answer:';
-    const gptResponseForQuestion = await openai.complete({
-        engine: 'davinci',
-        prompt: promptForQuestion,
-        max_tokens: 60,
-    });
+  const result = response.data.choices[0].text.trim();
 
-    const questionAndAnswer = gptResponseForQuestion.data.choices[0].text.trim().split('\n');
-    const question = questionAndAnswer[0];
-    const correctAnswer = questionAndAnswer[1];
+  const questionAndAnswers = result.split('\n');
+  const question = questionAndAnswers[0];
+  const answers = questionAndAnswers.slice(1);
+  const correctAnswer = answers[0];
 
-    // Generate multiple choice options
-    const promptForChoices = `Generate three wrong answers for the trivia question: "${question}"`;
-    const gptResponseForChoices = await openai.complete({
-        engine: 'davinci',
-        prompt: promptForChoices,
-        max_tokens: 60,
-    });
-
-    let choices = gptResponseForChoices.data.choices[0].text.trim().split('\n');
-    
-    // Insert correct answer at random index
-    const correctIndex = Math.floor(Math.random() * 4);
-    choices.splice(correctIndex, 0, correctAnswer);
-
-    context.res = {
-        body: {
-            question: question,
-            choices: choices,
-            correctIndex: correctIndex
-        }
-    };
+  context.res = {
+    // status: 200, /* Defaults to 200 */
+    body: {
+      question,
+      answers,
+      correctAnswer,
+    },
+  };
 };
 
 export default httpTrigger;
